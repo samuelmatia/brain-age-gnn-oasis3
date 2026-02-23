@@ -36,33 +36,37 @@ if os.path.exists(submissions_dir):
                 pred_df = pd.read_csv(pred_file)
                 score = calculate_mae(gt_df, pred_df)
                 if score is not None:
-                    # Append new finding without checking for duplicates
-                    leaderboard_data.append({"Team": team_name, "MAE": score})
+                    # FORCE uppercase keys here
+                    leaderboard_data.append({"TEAM": team_name, "MAE": score})
             except Exception as e:
                 print(f"Error processing {team_name}: {e}")
 
 # 4. Create Leaderboard (Full History)
 if leaderboard_data:
-    # Force creation of DataFrame
+    # Create DF and immediately force all columns to uppercase
     df = pd.DataFrame(leaderboard_data)
+    df.columns = df.columns.str.upper()
+
+    # If MAE is missing (e.g., empty CSV), create it as NaN to prevent crash
+    if 'MAE' not in df.columns:
+        df['MAE'] = pd.NA
+
+    # Explicitly convert the Series
+    df['MAE'] = pd.to_numeric(df['MAE'], errors='coerce')
     
-    # Standardize column names immediately
-    df.columns = [c.upper() for c in df.columns]
+    # Drop rows without scores and sort
+    df = df.dropna(subset=['MAE']).sort_values(by=["MAE", "TEAM"])
     
-    # CRITICAL FIX: Ensure 'MAE' column exists before calling to_numeric
-    if 'MAE' in df.columns:
-        # We ensure we are passing the Series explicitly
-        df['MAE'] = pd.to_numeric(df.get('MAE'), errors='coerce')
-        df = df.dropna(subset=['MAE']).sort_values(by=["MAE", "TEAM"])
-        
+    if not df.empty:
         # 5. DENSE RANKING
         df['RANK'] = df['MAE'].rank(method='dense').astype(int)
         
-        # Set final display columns
+        # Select and rename for final output
         leaderboard_df = df[['RANK', 'TEAM', 'MAE']]
         leaderboard_df.columns = ['Rank', 'Team', 'MAE']
     else:
-        print("Warning: MAE column not found in data.")
+        print("No valid numeric scores found.")
+        leaderboard_df = pd.DataFrame(columns=['Rank', 'Team', 'MAE'])
         
     # Formatting for Markdown display
     def format_rank(rank):
