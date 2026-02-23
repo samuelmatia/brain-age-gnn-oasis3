@@ -91,15 +91,22 @@ jobs:
           import pandas as pd
           df = pd.read_csv('leaderboard/leaderboard.csv')
           
-          # Force column names to be lowercase to avoid KeyError
+          # Standardize column names
           df.columns = [c.lower() for c in df.columns]
           
-          # Use 'mae' and 'team' (lowercase)
+          # Clean data
           df['mae'] = pd.to_numeric(df['mae'], errors='coerce')
-          df = df.dropna(subset=['mae']).sort_values('mae').drop_duplicates('team', keep='first')
+          df = df.dropna(subset=['mae'])
           
-          # Re-assign Ranks and capitalize for the final save if you prefer
-          df['rank'] = range(1, len(df) + 1)
+          # SORT: Lowest MAE first
+          df = df.sort_values('mae')
+          
+          # DENSE RANKING: (1, 1, 2, 3)
+          # 'dense' keeps the rank incrementing by 1 for the next unique value
+          df['rank'] = df['mae'].rank(method='dense').astype(int)
+          
+          # Reorder columns and save
+          df = df[['rank', 'team', 'mae']]
           df.columns = [c.capitalize() for c in df.columns]
           df.to_csv('leaderboard/leaderboard.csv', index=False)
           "
