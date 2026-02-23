@@ -1,11 +1,10 @@
-# 🏆 Competition Leaderboard
-Last updated: Mon Feb 23 10:45:45 UTC 2026 (UTC)
+# 🏆 Full Competition History
 
-| Rank | Team | MAE Score |
-|------|------|-----------|
-| 1 | test_submission_25 | 5.61988 |
-| 1 | test_submission_26 | 5.61988 |
-| 1 | test_submission_27 | 5.61988 |
-| 1 | test_submission_28 | 5.61988 |
-| 1 | test_submission_29 | 5.61988 |
-| 2 | test_team | 5.6199 |
+| Rank   | Team               |     MAE |
+|:-------|:-------------------|--------:|
+| 🥇 1st  | test_submission_25 | 5.61988 |
+| 🥇 1st  | test_submission_26 | 5.61988 |
+| 🥇 1st  | test_submission_27 | 5.61988 |
+| 🥇 1st  | test_submission_28 | 5.61988 |
+| 🥇 1st  | test_submission_29 | 5.61988 |
+| 🥈 2nd  | test_team          | 5.6199  |
