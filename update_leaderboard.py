@@ -113,7 +113,7 @@ if len(new_submissions) > 1:
     target_files = [new_submissions[0]]
 else:
     target_files = new_submissions
-    
+
 # --- 3. PROCESSING ---
 leaderboard_path = 'leaderboard/leaderboard.csv'
 if os.path.exists(leaderboard_path):
@@ -219,7 +219,7 @@ if not current_df.empty:
         <div class="leaderboard-card">
             <div class="header-section text-center">
                 <h1 class="fw-bold">🧠 Brain-Age Prediction Leaderboard</h1>
-                <div class="badge bg-primary mt-2">Last Updated: {pd.Timestamp.now().strftime('%b %d, %H:%M UTC')}</div>
+                <div class="badge bg-primary mt-2">Time: {pd.Timestamp.now().strftime('%b %d, %H:%M UTC')}</div>
             </div>
             <div class="table-responsive">
                 {html_table}
