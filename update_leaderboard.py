@@ -7,13 +7,8 @@ from Crypto.Cipher import AES, PKCS1_OAEP
 from Crypto.Util.Padding import unpad
 
 def get_git_file_info():
-    """
-    Identifies files added in the last merge/push.
-    Returns a list of (timestamp, filepath, status)
-    """
+    """Identifies files added in the last merge and extracts their commit time."""
     try:
-        # Get status and names of files changed in the last commit/merge
-        # Status 'A' = Added, 'M' = Modified, 'D' = Deleted
         raw_diff = subprocess.check_output(
             ['git', 'diff', '--name-status', 'HEAD^', 'HEAD'], 
             stderr=subprocess.STDOUT
@@ -23,8 +18,20 @@ def get_git_file_info():
         for line in raw_diff.splitlines():
             if not line.strip(): continue
             status, path = line.split(None, 1)
+            
             if path.endswith('.enc') and path.startswith('submissions/'):
-                changes.append({'path': path, 'status': status})
+                # NEW: Extract the Unix Author Timestamp (%at) for the specific file
+                ts_cmd = ['git', 'log', '-1', '--format=%at', '--', path]
+                timestamp_raw = subprocess.check_output(ts_cmd).decode('utf-8').strip()
+                
+                # NEW: Convert to readable UTC string
+                sub_time = pd.to_datetime(int(timestamp_raw), unit='s').strftime('%Y-%m-%d %H:%M UTC')
+                
+                changes.append({
+                    'path': path, 
+                    'status': status, 
+                    'sub_time': sub_time # Store the commit time
+                })
         return changes
     except Exception as e:
         print(f"Git error: {e}")
@@ -114,10 +121,15 @@ leaderboard_path = 'leaderboard/leaderboard.csv'
 if os.path.exists(leaderboard_path):
     current_df = pd.read_csv(leaderboard_path)
 else:
-    current_df = pd.DataFrame(columns=['Team', 'MAE'])
+    # Added 'Last Updated' column here
+    current_df = pd.DataFrame(columns=['Team', 'MAE', 'Last Updated'])
 
-for file_path in target_files:
+# Note: target_files is now a list of dictionaries from the new get_git_file_info()
+for entry in target_files:
+    file_path = entry['path']
+    submission_time = entry['sub_time']  # This is the actual commit time
     team_name = os.path.splitext(os.path.basename(file_path))[0]
+    
     try:
         with open(file_path, 'rb') as f:
             decrypted_csv = decrypt_file(f.read(), priv_key)
@@ -130,13 +142,21 @@ for file_path in target_files:
                 # Update logic: Only keep if better (lower MAE) or new team
                 if team_name in current_df['Team'].values:
                     old_score = current_df.loc[current_df['Team'] == team_name, 'MAE'].values[0]
+                    
                     if new_score < old_score:
                         current_df.loc[current_df['Team'] == team_name, 'MAE'] = new_score
+                        # Update timestamp to the time of this new personal best
+                        current_df.loc[current_df['Team'] == team_name, 'Last Updated'] = submission_time
                         print(f"🔥 New Personal Best for {team_name}: {new_score:.8f}")
                     else:
                         print(f"keep: {team_name}'s new score ({new_score:.8f}) was not better than existing ({old_score:.8f})")
                 else:
-                    new_row = pd.DataFrame({'Team': [team_name], 'MAE': [new_score]})
+                    # New Entry: Store the score and the commit timestamp
+                    new_row = pd.DataFrame({
+                        'Team': [team_name], 
+                        'MAE': [new_score], 
+                        'Last Updated': [submission_time]
+                    })
                     current_df = pd.concat([current_df, new_row], ignore_index=True)
                     print(f"✨ New Entry: {team_name} scored {new_score:.8f}")
 
@@ -150,15 +170,18 @@ if not current_df.empty:
     current_df = current_df.dropna(subset=['MAE'])
 
     # 2. Sort and Rank
-    # We sort by MAE (primary) and Team (secondary for alphabetical stability)
-    current_df = current_df.sort_values(by=['MAE', 'Team'], ascending=[True, True])
+    # Primary Sort: MAE (Lowest is best)
+    # Secondary Sort: Last Updated (Earliest submission wins the tie)
+    current_df = current_df.sort_values(
+        by=['MAE', 'Last Updated'], 
+        ascending=[True, True]
+    )
     
-    # 'dense' method: ties get the same rank, next rank is +1 (1, 2, 2, 3)
-    # We round to 8 decimals before ranking to ensure identical scores match perfectly
+    # Calculate 'dense' rank based on MAE only (so identical scores share a rank)
     current_df['Rank'] = current_df['MAE'].round(8).rank(method='dense').astype(int)
     
-    # 3. Final selection and ordering
-    final_df = current_df[['Rank', 'Team', 'MAE']]
+    # 3. Final selection (including the new column)
+    final_df = current_df[['Rank', 'Team', 'MAE', 'Last Updated']]
     
     os.makedirs('leaderboard', exist_ok=True)
     os.makedirs('docs', exist_ok=True)
@@ -170,7 +193,7 @@ if not current_df.empty:
     with open('leaderboard/LEADERBOARD.md', 'w') as f:
         f.write("# 🏆 Competition Leaderboard\n\n" + final_df.to_markdown(index=False, floatfmt=".8f"))
 
-    # HTML generation (with your Bootstrap styling)
+    # HTML generation (Adjusted formatters for the new column layout)
     html_table = final_df.to_html(
         classes='table table-hover text-center', 
         index=False,
@@ -187,11 +210,11 @@ if not current_df.empty:
         <title>OASIS3 Challenge</title>
         <style>
             body {{ background-color: #f4f7f6; font-family: 'Inter', sans-serif; padding: 40px 0; }}
-            .leaderboard-card {{ background: white; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); overflow: hidden; max-width: 800px; margin: auto; }}
+            .leaderboard-card {{ background: white; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); overflow: hidden; max-width: 900px; margin: auto; }}
             .header-section {{ background: linear-gradient(135deg, #0f172a 0%, #334155 100%); color: white; padding: 40px 20px; }}
             table {{ width: 100% !important; margin-bottom: 0 !important; }}
             th {{ background-color: #f8fafc !important; color: #64748b; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.05em; text-align: center; padding: 15px !important; }}
-            td {{ vertical-align: middle; font-size: 1rem; padding: 15px !important; text-align: center; font-weight: 500; }}
+            td {{ vertical-align: middle; font-size: 0.95rem; padding: 15px !important; text-align: center; font-weight: 500; }}
         </style>
     </head>
     <body>
@@ -210,6 +233,6 @@ if not current_df.empty:
     with open('docs/leaderboard.html', 'w') as f:
         f.write(html_content) 
 
-    print("🎉 Leaderboard files updated with tied ranking support.")
+    print("🎉 Leaderboard files updated with time-based tie-breaking.")
 else:
     print("❌ No valid scores to display.")
