@@ -1,9 +1,9 @@
 import os
 import pandas as pd
+import glob
 from io import StringIO
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import AES, PKCS1_OAEP
-import glob
 
 def decrypt_file(encrypted_blob, private_key_str):
     """Decrypts the .enc file content using RSA and AES."""
@@ -65,37 +65,29 @@ gt_df = pd.read_csv(StringIO(gt_data))
 gt_df.columns = gt_df.columns.str.strip() 
 
 # --- 2. SCAN & DECRYPT SUBMISSIONS ---
-# Use glob for recursive search in case files are nested
-submission_files = glob.glob('submissions/**/*.enc', recursive=True)
-print(f"🔎 Found {len(submission_files)} submission files.")
+submission_files = []
+for root, dirs, files in os.walk("."):
+    for file in files:
+        if file.endswith(".enc"):
+            submission_files.append(os.path.join(root, file))
+
+print(f"🔎 Found {len(submission_files)} .enc files: {submission_files}")
 
 leaderboard_data = []
-
 for file_path in submission_files:
-    filename = os.path.basename(file_path)
-    team_name = os.path.splitext(filename)[0]
-    
-    print(f"🔄 Processing Team: {team_name} ({file_path})")
-    
+    team_name = os.path.splitext(os.path.basename(file_path))[0]
     try:
         with open(file_path, 'rb') as f:
-            decrypted_csv = decrypt_file(f.read(), priv_key)
-        
+            decrypted_csv = decrypt_file(f.read(), os.getenv('RSA_PRIVATE_KEY'))
         if decrypted_csv:
             pred_df = pd.read_csv(StringIO(decrypted_csv))
-            pred_df.columns = pred_df.columns.str.strip()
             score = calculate_mae(gt_df, pred_df)
-            
             if score is not None:
-                print(f"✅ Scored {team_name}: {score:.8f}")
                 leaderboard_data.append({"TEAM": team_name, "MAE": score})
-            else:
-                print(f"❌ Calculation failed for {team_name}")
-        else:
-            print(f"⚠️ Decryption failed for {filename}")
+                print(f"✅ Success: {team_name} scored {score}")
     except Exception as e:
-        print(f"⚠️ Error processing {filename}: {e}")
-
+        print(f"❌ Failed to process {team_name}: {e}")
+        
 # --- 3. RANKING & DEDUPLICATION ---
 if leaderboard_data:
     df = pd.DataFrame(leaderboard_data)
