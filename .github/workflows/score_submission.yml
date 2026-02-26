@@ -33,51 +33,56 @@ jobs:
           TEST_LABELS: ${{ secrets.TEST_LABELS }}
           RSA_PRIVATE_KEY: ${{ secrets.RSA_PRIVATE_KEY }}
         run: |
-          # 1. Get all .enc files with their timestamps
-          # This logic specifically pairs each file with the timestamp of the commit it was in
-          ALL_FILES_WITH_TIME=$(git log --format="%ct" --name-only origin/main...HEAD | awk '
+          # 1. Detect if any existing files were modified or deleted (Tempering Check)
+          # This looks for any change that is NOT an "A" (Added) status
+          TAMPERED_FILES=$(git diff --name-status origin/main...HEAD | grep 'submissions/' | grep -v '^A' || true)
+          
+          if [ -n "$TAMPERED_FILES" ]; then
+            echo "score=Security Error" >> $GITHUB_OUTPUT
+            echo "multi_note=❌ **Security Warning:** Existing submission files were modified or deleted. Only NEW file additions are allowed. Please revert changes to previous files to proceed." >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+          # 2. Get only NEWLY added files with timestamps
+          # --diff-filter=A ensures we only look at newly created files
+          NEW_FILES_WITH_TIME=$(git log --diff-filter=A --format="%ct" --name-only origin/main...HEAD | awk '
             /^[0-9]+$/ { current_time=$1; next }
             /\.enc$/ { print current_time, $0 }
           ' | sort -nr)
 
-          # 2. Extract just the filename of the most recent one (top of the list)
-          FILE=$(echo "$ALL_FILES_WITH_TIME" | head -n 1 | cut -d' ' -f2-)
-
-          if [ -z "$FILE" ]; then
-            echo "ERROR: No .enc file detected."
+          if [ -z "$NEW_FILES_WITH_TIME" ]; then
+            echo "score=No New Submission" >> $GITHUB_OUTPUT
+            echo "multi_note=ℹ️ No new .enc submission files detected in this PR." >> $GITHUB_OUTPUT
             exit 1
           fi
 
-          # 3. Check for multiples for the PR note
-          UNIQUE_FILES=$(echo "$ALL_FILES_WITH_TIME" | cut -d' ' -f2- | sort -u)
-          COUNT=$(echo "$UNIQUE_FILES" | wc -l)
+          # 3. Select the latest added file
+          FILE=$(echo "$NEW_FILES_WITH_TIME" | head -n 1 | cut -d' ' -f2-)
+          COUNT=$(echo "$NEW_FILES_WITH_TIME" | cut -d' ' -f2- | sort -u | wc -l)
 
+          # 4. Prepare the note for the PR
           if [ "$COUNT" -gt 1 ]; then
-            MULTIPLE_NOTE="⚠️ **Note:** $COUNT submission files were detected. We evaluated the most recently committed file: \`$FILE\`."
+            NOTE="⚠️ **Multiple entries found:** $COUNT new files were added, but we are taking the latest file based on git add time: \`$FILE\`."
           else
-            MULTIPLE_NOTE=""
+            NOTE="✅ Evaluating new submission: \`$FILE\`"
           fi
-          echo "multi_note=$MULTIPLE_NOTE" >> $GITHUB_OUTPUT
+          echo "multi_note=$NOTE" >> $GITHUB_OUTPUT
 
-          # 4. Extract Team Name (e.g., submissions/team_a.enc -> team_a)
+          # 5. Extraction and Scoring
           FILENAME=$(basename "$FILE")
           TEAM_NAME="${FILENAME%.*}"
           echo "team_name=$TEAM_NAME" >> $GITHUB_OUTPUT
           
-          # 5. Run the actual evaluation
           python competition/evaluate.py --file "$FILE" | tee out.txt
-          
-          # 6. Extract the score from the python output
           RAW_SCORE=$(grep "SCORE_MAE" out.txt | awk '{print $2}')
           
           if [ -z "$RAW_SCORE" ] || [ "$RAW_SCORE" == "None" ]; then
             echo "score=Error" >> $GITHUB_OUTPUT
           else
-            # Ensure 8 decimal precision
             FORMATTED_SCORE=$(printf "%.8f" $RAW_SCORE)
             echo "score=$FORMATTED_SCORE" >> $GITHUB_OUTPUT
           fi
-
+          
       - name: Post Score to PR
         uses: mshick/add-pr-comment@v2
         if: always()
@@ -85,10 +90,7 @@ jobs:
           message: |
             ## 🧠 Brain-Age GNN Submission Result
             
-            **Team:** `${{ steps.eval.outputs.team_name }}`
+            **Team:** `${{ steps.eval.outputs.team_name || 'Unknown' }}`
             **Score (MAE):** `${{ steps.eval.outputs.score }}`
             
             ${{ steps.eval.outputs.multi_note }}
-            
-            ---
-            *Note: The official leaderboard will update automatically once this Pull Request is merged into the main branch.*
