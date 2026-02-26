@@ -5,7 +5,8 @@ on:
     branches:
       - main
     paths:
-      - 'submissions/**' 
+      # CHANGE 1: Trigger when any .enc file is added to the submissions folder
+      - 'submissions/*.enc'
   workflow_dispatch:
 
 permissions:
@@ -40,10 +41,10 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           
-          # 1. Add the CSV and Markdown files
+          # CHANGE 2: Add EVERYTHING in submissions, leaderboard, and docs
+          # This ensures the new .enc file AND the updated leaderboard files are tracked
+          git add submissions/*.enc
           git add leaderboard/leaderboard.csv leaderboard/LEADERBOARD.md
-          
-          # 2. Add the HTML file from the docs folder (where your script saves it)
           git add docs/leaderboard.html
           
           # 3. Only commit and push if there are changes

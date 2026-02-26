@@ -38,16 +38,14 @@ jobs:
           TEST_LABELS: ${{ secrets.TEST_LABELS }}
           RSA_PRIVATE_KEY: ${{ secrets.RSA_PRIVATE_KEY }}
         run: |
-          # 1. SMART DETECTION: Find the file added in THIS action
+          # 1. SMART DETECTION: Find the .enc file
           if [ "${{ github.event_name }}" == "pull_request" ]; then
             SUBMISSION_FILE=$(git diff --name-only origin/main...HEAD | grep 'submissions/.*\.enc$' | head -n 1)
           else
-            # On Merge/Push, we look at the last commit specifically
             SUBMISSION_FILE=$(git diff --name-only HEAD^ HEAD | grep 'submissions/.*\.enc$' | head -n 1)
           fi
 
-          # Fallback: if git diff is empty, find the newest file
-          if [ -z "$SUBMISSION_FILE" ]; then
+          if [ -z "$SUBMISSION_FILE" ]; then 
             SUBMISSION_FILE=$(find submissions -name "*.enc" -printf '%T+ %p\n' | sort -r | head -n 1 | cut -d' ' -f2)
           fi
 
@@ -56,7 +54,13 @@ jobs:
             exit 1
           fi
 
-          TEAM_NAME=$(basename $(dirname "$SUBMISSION_FILE"))
+          # --- FIX STARTS HERE ---
+          # Get filename without path and without extension
+          # submissions/team_alpha.enc -> team_alpha
+          FILENAME=$(basename "$SUBMISSION_FILE")
+          TEAM_NAME="${FILENAME%.*}" 
+          # --- FIX ENDS HERE ---
+
           echo "Detected Team: $TEAM_NAME"
           
           python competition/evaluate.py --file "$SUBMISSION_FILE" | tee evaluation_output.txt
@@ -64,7 +68,7 @@ jobs:
           SCORE=$(grep "SCORE_MAE" evaluation_output.txt | awk '{print $2}')
           echo "score=$SCORE" >> $GITHUB_OUTPUT
           echo "team_name=$TEAM_NAME" >> $GITHUB_OUTPUT
-
+          
       - name: Post Score to PR
         if: github.event_name == 'pull_request'
         uses: mshick/add-pr-comment@v2

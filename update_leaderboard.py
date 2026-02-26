@@ -16,63 +16,49 @@ if not gt_data:
     exit(1)
 gt_df = pd.read_csv(StringIO(gt_data))
 
-# 2. LOAD EXISTING DATA (Persistent History)
+# 2. LOAD EXISTING DATA (For legacy history, if needed)
 csv_path = 'leaderboard/leaderboard.csv'
-existing_teams = set()
 leaderboard_data = []
 
 if os.path.exists(csv_path):
     existing_df = pd.read_csv(csv_path)
-    # Standardize headers to find 'TEAM' regardless of original casing
     existing_df.columns = existing_df.columns.str.strip().str.upper()
-    
-    if 'TEAM' in existing_df.columns:
-        # Cache existing names for the strict check in Section 3
-        existing_teams = set(existing_df['TEAM'].astype(str).str.upper().unique())
-        leaderboard_data = existing_df.to_dict('records')
+    leaderboard_data = existing_df.to_dict('records')
 
-# 3. Scan for NEW submissions with STRICT duplicate check
+# 3. SCAN SUBMISSIONS (File-based logic)
 submissions_dir = 'submissions'
 if os.path.exists(submissions_dir):
-    for team_name in os.listdir(submissions_dir):
-        if not team_name or team_name.lower() == 'nan' or team_name.startswith('.'):
-            continue
-
-        # --- THE STRICT CHECK ---
-        # Blocks the merge if the folder name is already in the CSV history
-        if team_name.upper() in existing_teams:
-            print(f"❌ ERROR: Team '{team_name}' already exists in the leaderboard.")
-            print("To update, delete the old entry from leaderboard.csv or use a unique name.")
-            exit(1) 
-        # ------------------------
-
-        team_path = os.path.join(submissions_dir, team_name)
-        pred_file = os.path.join(team_path, 'predictions.csv')
-        
-        if os.path.isdir(team_path) and os.path.exists(pred_file):
+    # Iterate through files, not folders
+    for filename in os.listdir(submissions_dir):
+        # We look specifically for .enc files
+        if filename.endswith('.enc'):
+            # Extract Team Name from filename: "team_alpha.enc" -> "team_alpha"
+            team_name = os.path.splitext(filename)[0]
+            file_path = os.path.join(submissions_dir, filename)
+            
             try:
-                pred_df = pd.read_csv(pred_file)
+                # Read the .enc file (assuming it's formatted as a CSV)
+                pred_df = pd.read_csv(file_path)
                 score = calculate_mae(gt_df, pred_df)
+                
                 if score is not None:
+                    # Append this new/updated result to our data list
                     leaderboard_data.append({"TEAM": team_name, "MAE": score})
             except Exception as e:
-                print(f"Error processing {team_name}: {e}")
+                print(f"Error processing {filename}: {e}")
 
-# 4. Create Leaderboard (Full History)
+# 4. Create Leaderboard (Deduplicate & Rerank All)
 if leaderboard_data:
     df = pd.DataFrame(leaderboard_data)
-    
-    # Standardize column names
     df.columns = df.columns.str.strip().str.upper()
-    
-    # Collapse duplicate columns (merges 'Team' and 'TEAM')
     df = df.groupby(level=0, axis=1).first()
 
     # Clean up and force numeric
     df = df.dropna(subset=['TEAM'])
     df['MAE'] = pd.to_numeric(df['MAE'], errors='coerce')
 
-    # DEDUPLICATION: Cleans up any existing duplicates in the history
+    # DEDUPLICATION: If 'team_name.enc' and 'team_name_2.enc' both exist, 
+    # we keep the one with the best (lowest) MAE.
     df = df.sort_values(by=['MAE']).drop_duplicates(subset=['TEAM'], keep='first')
 
     # Final Sort and Rank
@@ -91,8 +77,6 @@ if leaderboard_data:
 
     # 6. Generate HTML for GitHub Pages (docs/ folder)
     os.makedirs('docs', exist_ok=True)
-    
-    # Format MAE to show 8 decimals in the web view
     html_table = leaderboard_df.to_html(
         classes='table table-hover text-center', 
         index=False,
