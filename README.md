@@ -123,16 +123,16 @@ Generate a `predictions.csv` file with **exactly two columns**:
 - `subject_session`
 - `age_at_visit`
 
-> **Note:** `subject_session` is the concatenation of the `Subject` and `MR_session` values from `test_data.csv`  
-> Example: `Test_Sub_001_Sess_01`
+> **Note:** `subject_session` is the concatenation of the `Subject` and `MR_session` values with symbol `-` from `test_data.csv`  
+> Example: `Test_Sub_001-Sess_01`
 
 #### 📄 Sample Format for `predictions.csv`
 
 |    subject_session     |  age_at_visit   |
 | :--------------------- | :-------------- |
-| Test_Sub_001_Sess_01   | 66.03822358     |
-| Test_Sub_001_Sess_02   | 66.35320381     |
-| Test_Sub_002_Sess_01   | 63.15323790     |
+| Test_Sub_001-Sess_01   | 66.03822358     |
+| Test_Sub_001-Sess_02   | 66.35320381     |
+| Test_Sub_002-Sess_01   | 63.15323790     |
 
 ### 2. Install Encryption Dependencies
 Ensure you have the required cryptography library installed in your local environment:
