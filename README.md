@@ -98,7 +98,7 @@ The dataset (431 total sessions) is split approximately into **80% Training**, *
 ---
 
 ## 📥 Loading the Adjacency Matrices
-The adjacency matrices are provided as CSV files under `data/public/adjacency_matrices/`. Each file is named by its Session ID (e.g., `OAS30001_d0757.csv`). You can load them as follows:
+The adjacency matrices are provided as CSV files under `data/public/adjacency_matrices/`. Each file is named by its Session ID (e.g., `OAS30001_d0757.csv` corresponds to `OAS30001_MR_d0757` subject session). You can load them as follows:
 
 ```python
 import pandas as pd
