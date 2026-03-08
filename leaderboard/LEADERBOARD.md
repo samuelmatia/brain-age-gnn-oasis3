@@ -1,6 +1,5 @@
 # 🏆 Competition Leaderboard
 
-|   Rank | Team              |         MAE | Last Updated         |
-|-------:|:------------------|------------:|:---------------------|
-|      1 | sample_submission |  5.61988044 | 2026-02-27 02:18 UTC |
-|      2 | murad             | 29.74734302 | 2026-03-03 15:03 UTC |
+|   Rank | Team              |        MAE | Last Updated         |
+|-------:|:------------------|-----------:|:---------------------|
+|      1 | sample_submission | 5.61988044 | 2026-03-08 06:27 UTC |
